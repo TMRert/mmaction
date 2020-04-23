@@ -5,29 +5,46 @@ import os.path as osp
 import glob
 from pipes import quote
 from multiprocessing import Pool, current_process
+import shutil
 
 import mmcv
-
 
 def dump_frames(vid_item):
     full_path, vid_path, vid_id = vid_item
     vid_name = vid_path.split('.')[0]
-    out_full_path = osp.join(args.out_dir, vid_name)
+
+
+    if args.temp_dir is None:
+        temp_dir = args.out_dir
+    else:
+        temp_dir = args.temp_dir
+        try:
+            os.mkdir(osp.join(args.temp_dir, vid_name))
+        except OSError:
+            pass
+
     try:
-        os.mkdir(out_full_path)
+        os.mkdir(osp.join(args.out_dir, vid_name))
     except OSError:
         pass
     vr = mmcv.VideoReader(full_path)
-    for i in range(len(vr)):
-        if vr[i] is not None:
-            mmcv.imwrite(
-                vr[i], '{}/img_{:05d}.jpg'.format(out_full_path, i + 1))
+    video_length = 0
+    while vr.vcap.isOpened():
+        ret, frame = vr.vcap.read()
+        if ret:
+            if arg.temp_dir is not None:
+                mmcv.imwrite(frame, '{}/img_{:05d}.jpg'.format(osp.join(args.temp_dir, vid_name), video_length + 1))
+            else:
+                mmcv.imwrite(frame, '{}/img_{:05d}.jpg'.format(osp.join(args.out_dir, vid_name), video_length + 1))
         else:
-            print('[Warning] length inconsistent!'
-                  'Early stop with {} out of {} frames'.format(i + 1, len(vr)))
             break
-    print('{} done with {} frames'.format(vid_name, len(vr)))
+        video_length += 1
+    print('{} done with {} frames'.format(vid_name, video_length))
     sys.stdout.flush()
+    vr.vcap.release()
+
+    if args.temp_dir is not None:
+        shutil.move(osp.join(args.temp_dir, vid_name), osp.join(args.out_dir, vid_name))
     return True
 
 
@@ -46,33 +63,6 @@ def run_optical_flow(vid_item, dev_id=0):
     flow_x_path = '{}/flow_x'.format(out_full_path)
     flow_y_path = '{}/flow_y'.format(out_full_path)
 
-    cmd = osp.join(args.df_path, 'build/extract_gpu') + \
-        ' -f={} -x={} -y={} -i={} -b=20 -t=1 -d={} -s=1 -o={} -w={} -h={}' \
-        .format(
-        quote(full_path),
-        quote(flow_x_path), quote(flow_y_path), quote(image_path),
-        dev_id, args.out_format, args.new_width, args.new_height)
-
-    os.system(cmd)
-    print('{} {} done'.format(vid_id, vid_name))
-    sys.stdout.flush()
-    return True
-
-
-def run_warp_optical_flow(vid_item, dev_id=0):
-    full_path, vid_path, vid_id = vid_item
-    vid_name = vid_path.split('.')[0]
-    out_full_path = osp.join(args.out_dir, vid_name)
-    try:
-        os.mkdir(out_full_path)
-    except OSError:
-        pass
-
-    current = current_process()
-    dev_id = (int(current._identity[0]) - 1) % args.num_gpu
-    flow_x_path = '{}/flow_x'.format(out_full_path)
-    flow_y_path = '{}/flow_y'.format(out_full_path)
-
     cmd = osp.join(args.df_path + 'build/extract_warp_gpu') + \
         ' -f={} -x={} -y={} -b=20 -t=1 -d={} -s=1 -o={}'.format(
             quote(full_path), quote(flow_x_path), quote(flow_y_path),
@@ -88,6 +78,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description='extract optical flows')
     parser.add_argument('src_dir', type=str)
     parser.add_argument('out_dir', type=str)
+    parser.add_argument('temp_dir', type=str, default=None)
     parser.add_argument('--level', type=int,
                         choices=[1, 2],
                         default=2)
@@ -99,7 +90,7 @@ def parse_args():
     parser.add_argument("--out_format", type=str, default='dir',
                         choices=['dir', 'zip'], help='output format')
     parser.add_argument("--ext", type=str, default='avi',
-                        choices=['avi', 'mp4'], help='video file extensions')
+                        choices=['avi', 'mp4', 'webm'], help='video file extensions')
     parser.add_argument("--new_width", type=int, default=0,
                         help='resize image width')
     parser.add_argument("--new_height", type=int,
@@ -116,22 +107,39 @@ def parse_args():
 if __name__ == '__main__':
     args = parse_args()
 
+    if args.temp_dir is None:
+        temp_dir = args.out_dir
+    else:
+        temp_dir = args.temp_dir
+
+    if not osp.isdir(temp_dir):
+        print('Creating folder: {}'.format(temp_dir))
+
     if not osp.isdir(args.out_dir):
         print('Creating folder: {}'.format(args.out_dir))
+
         os.makedirs(args.out_dir)
     if args.level == 2:
         classes = os.listdir(args.src_dir)
         for classname in classes:
-            new_dir = osp.join(args.out_dir, classname)
-            if not osp.isdir(new_dir):
-                print('Creating folder: {}'.format(new_dir))
-                os.makedirs(new_dir)
+            new_out_dir = osp.join(args.out_dir, classname)
+            new_temp_dir = osp.join(temp_dir, classname)
+
+            if not osp.isdir(new_out_dir):
+                print('Creating folder: {}'.format(new_out_dir))
+                os.makedirs(new_out_dir)
+
+            if not osp.isdir(new_temp_dir):
+                print('Creating folder: {}'.format(new_temp_dir))
+                os.makedirs(new_temp_dir)
 
     print('Reading videos from folder: ', args.src_dir)
     print('Extension of videos: ', args.ext)
     if args.level == 2:
         fullpath_list = glob.glob(args.src_dir + '/*/*.' + args.ext)
         done_fullpath_list = glob.glob(args.out_dir + '/*/*')
+        done_temppath_list = glob.glob(temp_dir + '/*/*')
+
     elif args.level == 1:
         fullpath_list = glob.glob(args.src_dir + '/*.' + args.ext)
         done_fullpath_list = glob.glob(args.out_dir + '/*')
@@ -140,6 +148,7 @@ if __name__ == '__main__':
         fullpath_list = set(fullpath_list).difference(set(done_fullpath_list))
         fullpath_list = list(fullpath_list)
         print('Resuming. number of videos to be done: ', len(fullpath_list))
+
 
     if args.level == 2:
         vid_list = list(map(lambda p: osp.join(

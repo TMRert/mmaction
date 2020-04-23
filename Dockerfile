@@ -1,4 +1,7 @@
-FROM nvidia/cuda:9.0-cudnn7-devel-ubuntu16.04
+ARG cuda_version=10.0
+ARG cudnn_version=7
+FROM nvidia/cuda:${cuda_version}-cudnn${cudnn_version}-devel-ubuntu16.04
+
 
 MAINTAINER @mynameismaxz (github.com/mynameismaxz)
 
@@ -93,7 +96,7 @@ RUN wget -O OpenCV-4.1.0.zip https://github.com/opencv/opencv/archive/4.1.0.zip 
     && mkdir build \
     && cd build \
     ### using cmake refer from INSTALLATION.md default file ###
-    && cmake \ 
+    && cmake \
         -DCMAKE_BUILD_TYPE=Release \
         -DWITH_CUDA=ON \
         -DOPENCV_EXTRA_MODULES_PATH=../../opencv_contrib-4.1.0/modules/ \
@@ -104,10 +107,10 @@ RUN wget -O OpenCV-4.1.0.zip https://github.com/opencv/opencv/archive/4.1.0.zip 
         -DBUILD_opencv_dnns_easily_fooled=OFF \
         -DOPENCV_ENABLE_NONFREE=ON \
         .. \
-    && make -j
+    && make -j"$(nproc)"
 
 # clone repository (mmaction)
-RUN git clone --recursive https://github.com/open-mmlab/mmaction.git
+RUN git clone --recursive https://github.com/TMRert/mmaction.git
 
 # install cmake first
 RUN wget --no-check-certificate https://cmake.org/files/v3.9/cmake-3.9.0.tar.gz \
@@ -115,14 +118,14 @@ RUN wget --no-check-certificate https://cmake.org/files/v3.9/cmake-3.9.0.tar.gz 
     && rm -rf cmake-3.9.0.tar.gz \
     && cd cmake-3.9.0 \
     && ./bootstrap --system-curl \
-    && make -j && make install
+    && make -j"$(nproc)" && make install
 
 # install decord
 RUN cd mmaction/third_party/decord \
     && mkdir -p build \
     && cd build \
     && cmake .. -DUSE_CUDA=0 \
-    && make -j \
+    && make -j"$(nproc)" \
     && cd ../python \
     && python3 setup.py install --user
 
@@ -131,7 +134,7 @@ RUN cd mmaction/third_party/dense_flow \
     && mkdir build \
     && cd build \
     && OpenCV_DIR=/data/opencv-4.1.0/build/ cmake .. \
-    && make -j
+    && make -j"$(nproc)"
 
 # install mmcv
 RUN git clone --recursive https://github.com/open-mmlab/mmcv.git \
@@ -139,7 +142,7 @@ RUN git clone --recursive https://github.com/open-mmlab/mmcv.git \
     && pip install -e .
 
 # setup mmaction
-RUN cd mmaction \ 
+RUN cd mmaction \
     && chmod 777 compile.sh \
     && ./compile.sh \
     && python3 setup.py develop

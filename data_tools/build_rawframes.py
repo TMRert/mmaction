@@ -67,7 +67,6 @@ def parse_args():
     parser = argparse.ArgumentParser(description='extract optical flows')
     parser.add_argument('src_dir', type=str)
     parser.add_argument('out_dir', type=str)
-    parser.add_argument('--temp_dir', type=str, default=None)
     parser.add_argument('--level', type=int,
                         choices=[1, 2],
                         default=2)
@@ -96,38 +95,22 @@ def parse_args():
 if __name__ == '__main__':
     args = parse_args()
 
-    if args.temp_dir is None:
-        temp_dir = args.out_dir
-    else:
-        temp_dir = args.temp_dir
-
-    if not osp.isdir(temp_dir):
-        print('Creating folder: {}'.format(temp_dir))
-
     if not osp.isdir(args.out_dir):
         print('Creating folder: {}'.format(args.out_dir))
-
         os.makedirs(args.out_dir)
     if args.level == 2:
         classes = os.listdir(args.src_dir)
         for classname in classes:
             new_out_dir = osp.join(args.out_dir, classname)
-            new_temp_dir = osp.join(temp_dir, classname)
-
             if not osp.isdir(new_out_dir):
                 print('Creating folder: {}'.format(new_out_dir))
                 os.makedirs(new_out_dir)
-
-            if not osp.isdir(new_temp_dir):
-                print('Creating folder: {}'.format(new_temp_dir))
-                os.makedirs(new_temp_dir)
 
     print('Reading videos from folder: ', args.src_dir)
     print('Extension of videos: ', args.ext)
     if args.level == 2:
         fullpath_list = glob.glob(args.src_dir + '/*/*.' + args.ext)
         done_fullpath_list = glob.glob(args.out_dir + '/*/*')
-        done_temppath_list = glob.glob(temp_dir + '/*/*')
 
     elif args.level == 1:
         fullpath_list = glob.glob(args.src_dir + '/*.' + args.ext)

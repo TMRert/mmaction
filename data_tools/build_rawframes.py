@@ -24,10 +24,7 @@ def dump_frames(vid_item):
     while vr.vcap.isOpened():
         ret, frame = vr.vcap.read()
         if ret:
-            if arg.temp_dir is not None:
-                mmcv.imwrite(frame, '{}/img_{:05d}.jpg'.format(osp.join(args.temp_dir, vid_name), video_length + 1))
-            else:
-                mmcv.imwrite(frame, '{}/img_{:05d}.jpg'.format(osp.join(args.out_dir, vid_name), video_length + 1))
+            mmcv.imwrite(frame, '{}/img_{:05d}.jpg'.format(osp.join(args.out_dir, vid_name), video_length + 1))
         else:
             break
         video_length += 1

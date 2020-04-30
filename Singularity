@@ -8,11 +8,14 @@ From: nvidia/cuda:10.0-cudnn7-devel-ubuntu16.04
 MAINTAINER T.M.rietveld@student.tudelft.nl
 
 %post
+    DATA_LOCATION=/data
+    CODE_LOCATION=/src
+    PACKAGE_LOCATION=/packages
 
     # Directories for Sherlock
-    mkdir -p /data
-    mkdir -p /mmaction
-    mkdir -p /mmcv
+    mkdir -p $DATA_LOCATION
+    mkdir -p $CODE_LOCATION
+    mkdir -p $PACKAGE_LOCATION
     mkdir -p /scratch-local
     mkdir -p /share/PI
 
@@ -24,7 +27,6 @@ MAINTAINER T.M.rietveld@student.tudelft.nl
         python3.6-dev \
         python3-setuptools \
         python3-numpy \
-        python3-pip \
         make \
         cmake \
         libavcodec-dev \
@@ -71,24 +73,31 @@ MAINTAINER T.M.rietveld@student.tudelft.nl
     	libeigen3-dev \
     	libtbb-dev \
     	libgtk2.0-dev \
+      libhdf5-dev \
       && rm -rf /var/lib/apt/lists/*
 
       update-alternatives --install /usr/bin/python python /usr/bin/python3.6 2
       update-alternatives --config python
-      python -m pip install --upgrade pip
 
+      apt-get update && apt-get install -y python3-pip
+      python -m pip install --upgrade pip
       # install python deps
+      python -m pip install --upgrade numpy
+      python -c "import pip; print(pip.__version__)"
+      python -c 'import numpy; print("%s\n%s"%(numpy.__version__, numpy.__path__))'
       python -m pip install torchvision==0.4.0 \
           cython==0.29.11 \
-          numpy==1.18.1 \
           scipy \
           pandas \
           matplotlib \
           scikit-learn \
 
-      git clone --recursive https://github.com/TMRert/mmaction.git /mmaction
+      cd $CODE_LOCATION
+      git clone --recursive https://github.com/TMRert/mmaction.git
+
 
       # install cmake first
+      cd $PACKAGE_LOCATION
       wget --no-check-certificate https://cmake.org/files/v3.9/cmake-3.9.0.tar.gz \
           && tar -zxvf cmake-3.9.0.tar.gz \
           && rm -rf cmake-3.9.0.tar.gz \
@@ -96,6 +105,8 @@ MAINTAINER T.M.rietveld@student.tudelft.nl
           && ./bootstrap --system-curl \
           && make -j"$(nproc)" && make install
 
+
+      cd $PACKAGE_LOCATION
       wget -O OpenCV-4.1.0.zip https://github.com/opencv/opencv/archive/4.1.0.zip \
           && unzip OpenCV-4.1.0.zip \
           && rm -rf OpenCV-4.1.0.zip \
@@ -106,44 +117,64 @@ MAINTAINER T.M.rietveld@student.tudelft.nl
           && mkdir build \
           && cd build \
           && cmake \
-              -DCMAKE_BUILD_TYPE=Release \
-              -DWITH_CUDA=ON \
-              -DOPENCV_EXTRA_MODULES_PATH=../../opencv_contrib-4.1.0/modules/ \
-              -DWITH_TBB=ON \
-              -DBUILD_opencv_cnn_3dobj=OFF \
-              -DBUILD_opencv_dnn=OFF \
-              -DBUILD_opencv_dnn_modern=OFF \
-              -DBUILD_opencv_dnns_easily_fooled=OFF \
-              -DOPENCV_ENABLE_NONFREE=ON \
-              .. \
-          && make -j"$(nproc)"
+            -D CMAKE_BUILD_TYPE=Release \
+            -D CMAKE_INSTALL_PREFIX=/usr/local \
+            -D WITH_CUDA=ON \
+            -D OPENCV_EXTRA_MODULES_PATH=$PACKAGE_LOCATION/opencv_contrib-4.1.0/modules/ \
+            -D WITH_TBB=ON \
+            -D BUILD_opencv_cnn_3dobj=OFF \
+            -D BUILD_opencv_dnn=OFF \
+            -D BUILD_opencv_dnn_modern=OFF \
+            -D BUILD_opencv_dnns_easily_fooled=OFF \
+            -D OPENCV_ENABLE_NONFREE=ON \
+            -D BUILD_NEW_PYTHON_SUPPORT=ON \
+            -D BUILD_PYTHON_SUPPORT=ON \
+            -D BUILD_opencv_python3=ON \
+            -D HAVE_opencv_python3=ON \
+            -D PYTHON_DEFAULT_EXECUTABLE=/usr/bin/python3.6 \
+            -D PYTHON3_EXECUTABLE=/usr/bin/python3.6 \
+            -D PYTHON3_INCLUDE_DIR=/usr/include/python3.6m \
+            -D PYTHON3_LIBRARY=/usr/lib/x86_64-linux-gnu/libpython3.6m.so \
+            -D PYTHON3_PACKAGES_PATH=/usr/local/lib/python3.6/dist-packages/ \
+            -D PYTHON3_NUMPY_INCLUDE_DIRS:PATH=/usr/local/lib/python3.6/dist-packages/numpy/core/include/ \
+            .. \
+          && make -j"$(nproc)" \
+          && make install
 
+%appinstall mmaction
       # install decord
-      cd /mmaction/third_party/decord \
+      cd $CODE_LOCATION/mmaction/third_party/decord \
           && mkdir -p build \
           && cd build \
           && cmake .. -DUSE_CUDA=0 \
           && make -j"$(nproc)" \
           && cd ../python \
-          && python3 setup.py install --user
+          && python setup.py install --user
 
       # install dense flow
-      cd /mmaction/third_party/dense_flow \
+      cd $CODE_LOCATION/mmaction/third_party/dense_flow \
           && mkdir build \
           && cd build \
-          && cmake .. \
+          && OpenCV_DIR=$PACKAGE_LOCATION/opencv-4.1.0/build cmake .. \
           && make -j"$(nproc)"
 
       # install mmcv
-      git clone --recursive https://github.com/open-mmlab/mmcv.git /mmcv \
-          && cd /mmcv \
+      cd $CODE_LOCATION
+      git clone --recursive https://github.com/open-mmlab/mmcv.git \
+          && cd $CODE_LOCATION/mmcv \
           && python -m pip install -e .
 
       # setup mmaction
-      cd /mmaction \
+      cd $CODE_LOCATION/mmaction \
           && chmod 777 compile.sh \
           && sh compile.sh \
           && python setup.py develop
 
+      ln -s $(which vim.tiny) /usr/local/bin/vim
+
 %environment
     LC_ALL=C
+    DATA_LOCATION=/data
+    CODE_LOCATION=/src
+    PACKAGE_LOCATION=/packages
+    export LC_ALL DATA_LOCATION CODE_LOCATION PACKAGE_LOCATION

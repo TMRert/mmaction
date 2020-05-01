@@ -6,6 +6,7 @@ import glob
 from pipes import quote
 from multiprocessing import Pool, current_process
 import shutil
+import functools
 
 import mmcv
 
@@ -88,6 +89,14 @@ def parse_args():
 
     return args
 
+def map_path_back(done_path, input_path, ext, level):
+    if level == 1:
+        video_name = done_path.split('/')[-1] + '.' + ext
+    if level == 2:
+        video_name = osp.join('/'.join(p.split('/')[-2:])) + '.' + ext
+
+    original_path = osp.join(input_path, video_name)
+    return original_path
 
 if __name__ == '__main__':
     args = parse_args()
@@ -114,7 +123,8 @@ if __name__ == '__main__':
         done_fullpath_list = glob.glob(args.out_dir + '/*')
     print('Total number of videos found: ', len(fullpath_list))
     if args.resume:
-        fullpath_list = set(fullpath_list).difference(set(done_fullpath_list))
+        mapped_done_pathlist = map(functools.partial(map_path_back, input_path=args.src_dir, ext=args.ext, level=args.level), done_fullpath_list)
+        fullpath_list = set(fullpath_list).difference(set(mapped_done_pathlist))
         fullpath_list = list(fullpath_list)
         print('Resuming. number of videos to be done: ', len(fullpath_list))
 

@@ -8,12 +8,14 @@ From: nvidia/cuda:10.0-cudnn7-devel-ubuntu16.04
 MAINTAINER T.M.rietveld@student.tudelft.nl
 
 %post
+    OUTPUT_LOCATION=/output
     DATA_LOCATION=/data
     CODE_LOCATION=/src
     PACKAGE_LOCATION=/packages
 
     # Directories for Sherlock
     mkdir -p $DATA_LOCATION
+    mkdir -p $OUTPUT_LOCATION
     mkdir -p $CODE_LOCATION
     mkdir -p $PACKAGE_LOCATION
     mkdir -p /scratch-local
@@ -172,9 +174,16 @@ MAINTAINER T.M.rietveld@student.tudelft.nl
 
       ln -s $(which vim.tiny) /usr/local/bin/vim
 
+
+%apprun mmaction
+    cd $CODE_LOCATION/mmaction/data_tools/
+    python build_rawframes.py $DATA_LOCATION $OUTPUT_FOLDER "$@"
+
+
 %environment
     LC_ALL=C
     DATA_LOCATION=/data
+    OUTPUT_FOLDER=/output
     CODE_LOCATION=/src
     PACKAGE_LOCATION=/packages
-    export LC_ALL DATA_LOCATION CODE_LOCATION PACKAGE_LOCATION
+    export LC_ALL DATA_LOCATION CODE_LOCATION PACKAGE_LOCATION OUTPUT_FOLDER

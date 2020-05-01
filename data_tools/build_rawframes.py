@@ -5,10 +5,9 @@ import os.path as osp
 import glob
 from pipes import quote
 from multiprocessing import Pool, current_process
-import shutil
-import functools
 
 import mmcv
+
 
 def dump_frames(vid_item):
     full_path, vid_path, vid_id = vid_item
@@ -25,7 +24,7 @@ def dump_frames(vid_item):
     while vr.vcap.isOpened():
         ret, frame = vr.vcap.read()
         if ret:
-            mmcv.imwrite(frame, '{}/img_{:05d}.jpg'.format(osp.join(args.out_dir, vid_name), video_length + 1))
+            mmcv.imwrite(frame, '{}/img_{:05d}.jpg'.format(out_full_path, video_length + 1))
         else:
             break
         video_length += 1
@@ -47,6 +46,33 @@ def run_optical_flow(vid_item, dev_id=0):
     current = current_process()
     dev_id = (int(current._identity[0]) - 1) % args.num_gpu
     image_path = '{}/img'.format(out_full_path)
+    flow_x_path = '{}/flow_x'.format(out_full_path)
+    flow_y_path = '{}/flow_y'.format(out_full_path)
+
+    cmd = osp.join(args.df_path, 'build/extract_gpu') + \
+        ' -f={} -x={} -y={} -i={} -b=20 -t=1 -d={} -s=1 -o={} -w={} -h={}' \
+        .format(
+        quote(full_path),
+        quote(flow_x_path), quote(flow_y_path), quote(image_path),
+        dev_id, args.out_format, args.new_width, args.new_height)
+
+    os.system(cmd)
+    print('{} {} done'.format(vid_id, vid_name))
+    sys.stdout.flush()
+    return True
+
+
+def run_warp_optical_flow(vid_item, dev_id=0):
+    full_path, vid_path, vid_id = vid_item
+    vid_name = vid_path.split('.')[0]
+    out_full_path = osp.join(args.out_dir, vid_name)
+    try:
+        os.mkdir(out_full_path)
+    except OSError:
+        pass
+
+    current = current_process()
+    dev_id = (int(current._identity[0]) - 1) % args.num_gpu
     flow_x_path = '{}/flow_x'.format(out_full_path)
     flow_y_path = '{}/flow_y'.format(out_full_path)
 
@@ -72,7 +98,7 @@ def parse_args():
     parser.add_argument('--flow_type', type=str,
                         default=None, choices=[None, 'tvl1', 'warp_tvl1'])
     parser.add_argument('--df_path', type=str,
-                        default='../../mmaction/third_party/dense_flow/')
+                        default='../../mmaction/third_party/dense_flow')
     parser.add_argument("--out_format", type=str, default='dir',
                         choices=['dir', 'zip'], help='output format')
     parser.add_argument("--ext", type=str, default='avi',
@@ -107,17 +133,16 @@ if __name__ == '__main__':
     if args.level == 2:
         classes = os.listdir(args.src_dir)
         for classname in classes:
-            new_out_dir = osp.join(args.out_dir, classname)
-            if not osp.isdir(new_out_dir):
-                print('Creating folder: {}'.format(new_out_dir))
-                os.makedirs(new_out_dir)
+            new_dir = osp.join(args.out_dir, classname)
+            if not osp.isdir(new_dir):
+                print('Creating folder: {}'.format(new_dir))
+                os.makedirs(new_dir)
 
     print('Reading videos from folder: ', args.src_dir)
     print('Extension of videos: ', args.ext)
     if args.level == 2:
         fullpath_list = glob.glob(args.src_dir + '/*/*.' + args.ext)
         done_fullpath_list = glob.glob(args.out_dir + '/*/*')
-
     elif args.level == 1:
         fullpath_list = glob.glob(args.src_dir + '/*.' + args.ext)
         done_fullpath_list = glob.glob(args.out_dir + '/*')
@@ -127,7 +152,6 @@ if __name__ == '__main__':
         fullpath_list = set(fullpath_list).difference(set(mapped_done_pathlist))
         fullpath_list = list(fullpath_list)
         print('Resuming. number of videos to be done: ', len(fullpath_list))
-
 
     if args.level == 2:
         vid_list = list(map(lambda p: osp.join(

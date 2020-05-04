@@ -169,3 +169,6 @@ if __name__ == '__main__':
     else:
         pool.map(dump_frames, zip(
             fullpath_list, vid_list, range(len(vid_list))))
+
+    pool.close()
+    pool.join() 

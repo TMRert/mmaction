@@ -5,7 +5,7 @@ import os.path as osp
 import glob
 from pipes import quote
 from multiprocessing import Pool, current_process
-
+import functools
 import mmcv
 
 
